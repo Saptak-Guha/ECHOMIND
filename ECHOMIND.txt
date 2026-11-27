@@ -1,0 +1,25 @@
+ECHOMIND
+
+-- BACKEND
+
+Step 1: Create a virtual environment and install dependencies
+
+cd d:\Projects\ECHOMIND\backend
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+
+Step 2: Set up environment variables
+
+cp ..\.env.example ..\.env
+# Edit .env with your OPENAI_API_KEY (optional — heuristic fallbacks work without it)
+
+Step 3: Start required services
+
+cd d:\Projects\ECHOMIND
+docker-compose up -d postgres redis neo4j chromadb
+
+Step 4: Start the backend
+
+cd d:\Projects\ECHOMIND\backend
+uvicorn app.main:app --reload --port 8000

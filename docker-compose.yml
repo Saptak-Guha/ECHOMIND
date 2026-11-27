@@ -1,0 +1,116 @@
+version: '3.9'
+
+services:
+  # ─── Frontend ───────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - echomind
+
+  # ─── Backend ────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8000:8000"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=echomind
+      - POSTGRES_PASSWORD=echomind_secret
+      - POSTGRES_DB=echomind
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=echomind_neo4j
+      # NOTE: the backend currently uses chromadb.PersistentClient (in-process,
+      # on-disk) and does not read these. Kept correct for a future HttpClient
+      # switch: 8000 is the in-container port; 8001 is only the host mapping.
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      neo4j:
+        condition: service_started
+      chromadb:
+        condition: service_started
+    volumes:
+      - backend_data:/app/data
+    networks:
+      - echomind
+
+  # ─── PostgreSQL ─────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: echomind
+      POSTGRES_PASSWORD: echomind_secret
+      POSTGRES_DB: echomind
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U echomind"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - echomind
+
+  # ─── Redis ──────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - echomind
+
+  # ─── Neo4j ──────────────────────────────────────────────────────────
+  neo4j:
+    image: neo4j:5
+    environment:
+      NEO4J_AUTH: neo4j/echomind_neo4j
+      NEO4J_PLUGINS: '["apoc"]'
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+    networks:
+      - echomind
+
+  # ─── ChromaDB ───────────────────────────────────────────────────────
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    networks:
+      - echomind
+
+volumes:
+  postgres_data:
+  redis_data:
+  neo4j_data:
+  chroma_data:
+  backend_data:
+
+networks:
+  echomind:
+    driver: bridge
